@@ -2,7 +2,7 @@ from django.http import HttpResponseForbidden
 from django.utils.deprecation import MiddlewareMixin
 from django.utils import timezone
 from django.core.cache import cache
-from ipgeolocation import IpGeoLocation
+import requests
 from .models import RequestLog, BlockedIP
 
 
@@ -24,7 +24,7 @@ class IPLoggingMiddleware(MiddlewareMixin):
         return ip
 
     def get_geolocation(self, ip):
-        """Fetch geolocation data (with 24h cache)."""
+        """Fetch geolocation data (with 24h cache) using free API."""
         cache_key = f"geo_{ip}"
         cached_data = cache.get(cache_key)
 
@@ -32,17 +32,22 @@ class IPLoggingMiddleware(MiddlewareMixin):
             return cached_data
 
         try:
-            geo = IpGeoLocation(ip)
-            data = {
-                "country": geo.country_name,
-                "city": geo.city,
-            }
+            # Using a free IP geolocation API
+            response = requests.get(f"http://ip-api.com/json/{ip}", timeout=5)
+            if response.status_code == 200:
+                data = response.json()
+                geo_data = {
+                    "country": data.get("country"),
+                    "city": data.get("city"),
+                }
+            else:
+                geo_data = {"country": None, "city": None}
         except Exception:
-            data = {"country": None, "city": None}
+            geo_data = {"country": None, "city": None}
 
         # Cache for 24 hours
-        cache.set(cache_key, data, timeout=60 * 60 * 24)
-        return data
+        cache.set(cache_key, geo_data, timeout=60 * 60 * 24)
+        return geo_data
 
     def process_request(self, request):
         ip = self.get_client_ip(request)
