@@ -1,15 +1,27 @@
-from django.contrib.auth.decorators import login_required
+from django.shortcuts import render
+
+from django.http import JsonResponse
+from django.contrib.auth import authenticate, login
 from ratelimit.decorators import ratelimit
-from django.http import HttpResponse
-from django.views.decorators.csrf import csrf_exempt
 
-@csrf_exempt
-@ratelimit(key='ip', rate='10/m', method='POST', block=True)
-@login_required
+
+@ratelimit(key="ip", rate="5/m", method="POST", block=True)  # 🚫 Anonymous users
+@ratelimit(key="user_or_ip", rate="10/m", method="POST", block=True)  # ✅ Authenticated users
 def login_view(request):
-    return HttpResponse('Authenticated login attempt')
+    """
+    A sample login view protected by IP-based rate limiting.
+    Anonymous: 5 requests/min
+    Authenticated: 10 requests/min
+    """
+    if request.method == "POST":
+        username = request.POST.get("username")
+        password = request.POST.get("password")
+        user = authenticate(request, username=username, password=password)
+        if user is not None:
+            login(request, user)
+            return JsonResponse({"status": "success", "message": "Logged in"})
+        else:
+            return JsonResponse({"status": "error", "message": "Invalid credentials"}, status=400)
 
-@csrf_exempt
-@ratelimit(key='ip', rate='5/m', method='POST', block=True)
-def anonymous_login_view(request):
-    return HttpResponse('Anonymous login attempt')
+    return JsonResponse({"status": "error", "message": "POST required"}, status=405)
+

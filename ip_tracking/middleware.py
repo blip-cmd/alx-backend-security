@@ -1,43 +1,64 @@
-import time
-from django.utils.deprecation import MiddlewareMixin
 from django.http import HttpResponseForbidden
-from .models import RequestLog, BlockedIP
+from django.utils.deprecation import MiddlewareMixin
+from django.utils import timezone
 from django.core.cache import cache
-from ipgeolocation import IpGeolocationAPI
-from django.conf import settings
+from ipgeolocation import IpGeoLocation
+from .models import RequestLog, BlockedIP
 
-class IPTrackingMiddleware(MiddlewareMixin):
-    def process_request(self, request):
-        ip = self.get_client_ip(request)
-        path = request.path
-        # Blocked IP check
-        if BlockedIP.objects.filter(ip_address=ip).exists():
-            return HttpResponseForbidden('Your IP is blacklisted.')
-        # Geolocation (cached for 24h)
-        geo = cache.get(f'geo_{ip}')
-        if not geo:
-            api_key = getattr(settings, 'IPGEOLOCATION_API_KEY', None)
-            if api_key:
-                geo_api = IpGeolocationAPI(api_key)
-                try:
-                    geo_data = geo_api.get_geolocation(ip_address=ip)
-                    country = geo_data.get('country_name', '')
-                    city = geo_data.get('city', '')
-                except Exception:
-                    country = ''
-                    city = ''
-            else:
-                country = ''
-                city = ''
-            geo = {'country': country, 'city': city}
-            cache.set(f'geo_{ip}', geo, 60*60*24)
-        # Log request
-        RequestLog.objects.create(ip_address=ip, path=path, country=geo['country'], city=geo['city'])
+
+class IPLoggingMiddleware(MiddlewareMixin):
+    """
+    Middleware that:
+    - Blocks blacklisted IPs
+    - Logs request details
+    - Adds geolocation (country, city) with caching
+    """
 
     def get_client_ip(self, request):
-        x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+        """Retrieve client IP address (handles proxies)."""
+        x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
         if x_forwarded_for:
-            ip = x_forwarded_for.split(',')[0]
+            ip = x_forwarded_for.split(",")[0].strip()
         else:
-            ip = request.META.get('REMOTE_ADDR')
+            ip = request.META.get("REMOTE_ADDR")
         return ip
+
+    def get_geolocation(self, ip):
+        """Fetch geolocation data (with 24h cache)."""
+        cache_key = f"geo_{ip}"
+        cached_data = cache.get(cache_key)
+
+        if cached_data:
+            return cached_data
+
+        try:
+            geo = IpGeoLocation(ip)
+            data = {
+                "country": geo.country_name,
+                "city": geo.city,
+            }
+        except Exception:
+            data = {"country": None, "city": None}
+
+        # Cache for 24 hours
+        cache.set(cache_key, data, timeout=60 * 60 * 24)
+        return data
+
+    def process_request(self, request):
+        ip = self.get_client_ip(request)
+
+        # 🚫 Block if IP is blacklisted
+        if BlockedIP.objects.filter(ip_address=ip).exists():
+            return HttpResponseForbidden("Your IP has been blocked.")
+
+        # 🌍 Geolocation lookup
+        geo_data = self.get_geolocation(ip)
+
+        # ✅ Log request
+        RequestLog.objects.create(
+            ip_address=ip,
+            path=request.path,
+            timestamp=timezone.now(),
+            country=geo_data.get("country"),
+            city=geo_data.get("city"),
+        )
