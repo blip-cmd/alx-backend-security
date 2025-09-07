@@ -19,6 +19,7 @@ from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 from django.http import JsonResponse
+from django.shortcuts import redirect
 from ip_tracking.views import login_view
 
 # Swagger imports
@@ -29,11 +30,57 @@ from drf_yasg import openapi
 def health_check(request):
     return JsonResponse({'status': 'healthy', 'service': 'alx-backend-security'})
 
+def api_root(request):
+    """API root endpoint with available endpoints"""
+    return JsonResponse({
+        'message': 'ALX Backend Security API',
+        'version': 'v1',
+        'endpoints': {
+            'health': '/health/',
+            'swagger_docs': '/swagger/',
+            'redoc_docs': '/redoc/',
+            'admin': '/admin/',
+            'api': '/api/v1/',
+            'login': '/login/',
+        },
+        'api_endpoints': {
+            'login': '/api/v1/login/',
+            'test_tasks': '/api/v1/test-tasks/',
+            'test_email': '/api/v1/test-email/',
+            'suspicious_ips': '/api/v1/suspicious-ips/',
+            'request_logs': '/api/v1/request-logs/',
+        }
+    })
+
+def redirect_to_swagger(request):
+    """Redirect root to swagger documentation"""
+    return redirect('/swagger/')
+
 schema_view = get_schema_view(
     openapi.Info(
         title="ALX Backend Security API",
         default_version='v1',
-        description="IP Tracking and Security API Documentation",
+        description="""
+        # ALX Backend Security API Documentation
+        
+        This API provides endpoints for IP tracking, security monitoring, and user authentication.
+        
+        ## Features
+        - IP tracking and geolocation
+        - Suspicious activity detection
+        - Request logging and monitoring
+        - Background task processing
+        - Email notifications
+        
+        ## Available Endpoints
+        - `/health/` - Health check endpoint
+        - `/api/v1/login/` - User authentication
+        - `/api/v1/suspicious-ips/` - View suspicious IP addresses
+        - `/api/v1/request-logs/` - View request logs
+        - `/api/v1/test-tasks/` - Test background tasks
+        - `/api/v1/test-email/` - Test email functionality
+        """,
+        terms_of_service="https://example.com/terms/",
         contact=openapi.Contact(email="admin@example.com"),
         license=openapi.License(name="MIT License"),
     ),
@@ -42,6 +89,12 @@ schema_view = get_schema_view(
 )
 
 urlpatterns = [
+    # Root endpoint - redirects to swagger docs
+    path('', redirect_to_swagger, name='root'),
+    
+    # API info endpoint
+    path('api/', api_root, name='api-root'),
+    
     path('admin/', admin.site.urls),
     path('health/', health_check, name='health-check'),
     path('login/', login_view, name='login'),
