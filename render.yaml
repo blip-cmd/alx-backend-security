@@ -1,0 +1,31 @@
+services:
+  - type: web
+    name: alx-backend-security
+    env: python
+    plan: free
+    buildCommand: "./build.sh"
+    startCommand: gunicorn core.wsgi:application --host=0.0.0.0 --port=$PORT
+    envVars:
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DEBUG
+        value: false
+      - key: ALLOWED_HOSTS
+        value: "*"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: alx-backend-security-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          name: alx-backend-security-redis
+          type: redis
+          property: connectionString
+
+  - type: redis
+    name: alx-backend-security-redis
+    plan: free
+
+databases:
+  - name: alx-backend-security-db
+    plan: free

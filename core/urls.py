@@ -18,12 +18,16 @@ from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
+from django.http import JsonResponse
 from ip_tracking.views import login_view
 
 # Swagger imports
 from rest_framework import permissions
 from drf_yasg.views import get_schema_view
 from drf_yasg import openapi
+
+def health_check(request):
+    return JsonResponse({'status': 'healthy', 'service': 'alx-backend-security'})
 
 schema_view = get_schema_view(
     openapi.Info(
@@ -39,6 +43,7 @@ schema_view = get_schema_view(
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path('health/', health_check, name='health-check'),
     path('login/', login_view, name='login'),
     
     # API Documentation
