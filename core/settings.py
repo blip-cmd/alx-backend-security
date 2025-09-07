@@ -12,7 +12,6 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 
 from pathlib import Path
 import os
-import dj_database_url
 from decouple import config
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -86,8 +85,11 @@ TEMPLATES = [
 WSGI_APPLICATION = 'core.wsgi.application'
 
 
-CELERY_BROKER_URL = config('CELERY_BROKER_URL', default=os.environ.get('REDIS_URL') if os.environ.get('REDIS_URL') else 'redis://localhost:6379/0')
-CELERY_RESULT_BACKEND = config('CELERY_RESULT_BACKEND', default=os.environ.get('REDIS_URL') if os.environ.get('REDIS_URL') else 'redis://localhost:6379/0')
+# Celery configuration - disabled for simple deployment
+# You can enable this later with Redis if needed
+CELERY_TASK_ALWAYS_EAGER = True  # Execute tasks synchronously
+CELERY_BROKER_URL = config('CELERY_BROKER_URL', default='memory://')
+CELERY_RESULT_BACKEND = config('CELERY_RESULT_BACKEND', default='cache+memory://')
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
@@ -104,46 +106,22 @@ CELERY_BEAT_SCHEDULE = {
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
-try:
-    # Try to use DATABASE_URL if available and valid
-    if 'DATABASE_URL' in os.environ and os.environ.get('DATABASE_URL'):
-        DATABASES = {
-            'default': dj_database_url.parse(os.environ.get('DATABASE_URL'))
-        }
-    else:
-        raise ValueError("No DATABASE_URL found")
-except (ValueError, KeyError):
-    # Fallback to SQLite for development or if DATABASE_URL is invalid
-    DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.sqlite3',
-            'NAME': BASE_DIR / 'db.sqlite3',
-        }
+# Use SQLite for simplicity in both development and production
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': BASE_DIR / 'db.sqlite3',
     }
+}
 
 # Cache configuration for geolocation caching and rate limiting
-try:
-    if 'REDIS_URL' in os.environ and os.environ.get('REDIS_URL'):
-        # Production cache configuration using Redis
-        CACHES = {
-            'default': {
-                'BACKEND': 'django_redis.cache.RedisCache',
-                'LOCATION': os.environ.get('REDIS_URL'),
-                'OPTIONS': {
-                    'CLIENT_CLASS': 'django_redis.client.DefaultClient',
-                }
-            }
-        }
-    else:
-        raise ValueError("No REDIS_URL found")
-except (ValueError, KeyError):
-    # Development cache configuration
-    CACHES = {
-        'default': {
-            'BACKEND': 'django.core.cache.backends.filebased.FileBasedCache',
-            'LOCATION': BASE_DIR / 'cache',
-        }
+# Use file-based cache for simplicity
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.filebased.FileBasedCache',
+        'LOCATION': BASE_DIR / 'cache',
     }
+}
 
 # Geolocation API configuration
 IPGEOLOCATION_API_KEY = config('IPGEOLOCATION_API_KEY', default='your-api-key')
